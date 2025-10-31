@@ -1,3 +1,12 @@
+# Note about Wikilinks Suggestion Fix
+
+> [!IMPORTANT]
+> This fork attempts to fix Obsidian’s wikilink suggestion popup not appearing for the commentator plugin. The popup should now open when typing or pasting `[[`.
+>
+> - **Keep “Automatic tag completion” ENABLED** in settings. If you disable it, the cursor may jump around unexpectedly when typing CriticMarkup tags like `{++`.
+> - **Suggestion Mode notice**: While wikilink suggestions popup do appear in Suggestion mode, it’s recommended to type the target file name out manually instead of accepting via Tab. Using Tab can be treated as a “change”, which may cause the link to become `~>[[Original Filename` and redirect incorrectly. Type the name fully to avoid this.
+
+
 # CriticMarkup plugin for Obsidian
 
 A [CriticMarkup](https://github.com/CriticMarkup/CriticMarkup-toolkit) renderer for [Obsidian](https://obsidian.md/) for
