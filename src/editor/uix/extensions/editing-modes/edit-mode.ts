@@ -19,6 +19,17 @@ function isUserEvent(event: string, events: string[]): boolean {
 	return events.some(e => e.startsWith(event));
 }
 
+function deriveUserEvent(tr: Transaction): string | undefined {
+    if (tr.isUserEvent("input")) return "input";
+    if (tr.isUserEvent("paste")) return "paste";
+    if (tr.isUserEvent("delete")) return "delete";
+    const events = getUserEvents(tr);
+    const selectEvent = events.find((e: string) => e.startsWith("select"));
+    return selectEvent;
+}
+
+// Core behavior: bracket-edge snapping as in original implementation
+
 export const editMode = (settings: PluginSettings): Extension =>
 	EditorState.transactionFilter.of(tr => applyCorrectedEdit(tr, settings));
 
@@ -68,29 +79,29 @@ function applyCorrectedEdit(tr: Transaction, settings: PluginSettings): Transact
 				continue;
 			}
 
-			if (editor_change.from === editor_change.to) {
-				const range = ranges_in_range[0];
-				if (range) {
-					const touches_bracket = range.touches_left_bracket(editor_change.from, false, true, true) ?
-						true :
-						range.touches_right_bracket(editor_change.from, false, true) ?
-						false :
-						undefined;
-					if (touches_bracket !== undefined) {
-						let cursor = editor_change.from;
-						if (cursor !== range.to - 3)
-							cursor = touches_bracket ? range.from : range.to;
-						changes.push({
-							from: cursor,
-							to: cursor,
-							insert: editor_change.inserted,
-						});
-						offset += editor_change.inserted.length;
-						selections.push(EditorSelection.cursor(cursor + offset));
-						continue;
-					}
-				}
-			} else {
+            if (editor_change.from === editor_change.to) {
+                const range = ranges_in_range[0];
+                if (range) {
+                    const touches_bracket = range.touches_left_bracket(editor_change.from, false, true, true) ?
+                        true :
+                        range.touches_right_bracket(editor_change.from, false, true) ?
+                        false :
+                        undefined;
+                    if (touches_bracket !== undefined) {
+                        let cursor = editor_change.from;
+                        if (cursor !== range.to - 3)
+                            cursor = touches_bracket ? range.from : range.to;
+                        changes.push({
+                            from: cursor,
+                            to: cursor,
+                            insert: editor_change.inserted,
+                        });
+                        offset += editor_change.inserted.length;
+                        selections.push(EditorSelection.cursor(cursor + offset));
+                        continue;
+                    }
+                }
+            } else {
 				if (!editor_change.inserted.length) {
 					const start = editor_change.from < ranges_in_range[0].from ?
 						editor_change.from :
@@ -136,16 +147,31 @@ function applyCorrectedEdit(tr: Transaction, settings: PluginSettings): Transact
 			}
 		}
 
-		return tr.startState.update(changes.length ? { changes, selection: EditorSelection.create(selections) } : {});
+    const forwardedEvent = deriveUserEvent(tr);
+    if (!changes.length)
+        return tr;
+    return tr.startState.update({
+        changes,
+        selection: EditorSelection.create(selections),
+        annotations: forwardedEvent ? [Transaction.userEvent.of(forwardedEvent)] : undefined,
+        filter: false,
+    });
 	} // CASE 2: Handle cursor movements
 	else if (
 		isUserEvent("select", userEvents) && cursorMoved(tr) &&
 		settings.alternative_cursor_movement /*&& tr.startState.field(editorLivePreviewField)*/
 	) {
-		if (latest_event && latest_event.instanceOf(KeyboardEvent)) {
-			const result = cursor_transaction_pass_syntax(tr, userEvents, vim_mode, settings, latest_event);
-			if (result)
-				return tr.startState.update(result);
+    if (latest_event && latest_event.instanceOf(KeyboardEvent)) {
+        const result = cursor_transaction_pass_syntax(tr, userEvents, vim_mode, settings, latest_event);
+        if (result) {
+            const forwardedEvent = deriveUserEvent(tr);
+            return tr.startState.update({
+                ...result,
+                annotations: forwardedEvent ? [Transaction.userEvent.of(forwardedEvent)] : result.annotations,
+                filter: false,
+            });
+        }
+        return tr;
 		}
 	}
 
